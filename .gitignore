@@ -1,0 +1,24 @@
+# Python
+__pycache__/
+*.pyc
+venv/
+.venv/
+
+# Secrets
+.env
+*.pem
+*.key
+
+# OS
+.DS_Store
+
+# Editor
+.vscode/
+.idea/
+
+# Generated agent packages
+aunix-agent-*.tar.gz
+aunix-agent-*/
+
+# Demo keys
+.aunix_demo/
