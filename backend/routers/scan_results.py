@@ -1,3 +1,26 @@
+"""
+/api/scan-results
+
+Called by the scanner agent to upload findings. Authenticated via
+Bearer agent token.
+
+After each successful upload, we ROTATE the agent token. The new token
+is returned in the response body, and the agent persists it to its
+config.json. This means:
+
+  - A captured-but-unused tarball remains valid until its first scan,
+    then becomes useless.
+  - Replaying a captured scan upload (with the just-used token) fails
+    because the token is already rotated.
+  - If an attacker steals an agent token mid-flight, they have a one-
+    time use; the legitimate agent will fail its NEXT scan, which
+    surfaces tampering.
+
+This is real defense-in-depth, but the threat model is bounded: a
+sophisticated attacker with persistent root on the target can always
+read the new token from disk and stay synchronized. See SECURITY_NOTES.md.
+"""
+
 from datetime import datetime
 
 from fastapi import APIRouter, Depends
@@ -7,6 +30,7 @@ from database import get_db
 from deps import get_current_target
 from models import TargetMachine, SSHKeyInventory, PolicyFinding
 from schemas import ScanUploadRequest
+from security import generate_agent_token, hash_agent_token
 
 router = APIRouter(tags=["scan"])
 
@@ -19,7 +43,7 @@ def upload_scan_results(
 ):
     """Called by the scanner agent. Auth = bearer agent token."""
 
-    # Replace this target's inventory with the latest scan.
+    # Wipe and replace the inventory + policy findings for this target.
     db.query(SSHKeyInventory).filter(
         SSHKeyInventory.target_id == target.id
     ).delete(synchronize_session=False)
@@ -73,6 +97,10 @@ def upload_scan_results(
     if payload.operating_system and not (target.operating_system or "").strip():
         target.operating_system = payload.operating_system
 
+    # Rotate the agent token. Old token becomes invalid the moment we commit.
+    new_token = generate_agent_token()
+    target.agent_token_hash = hash_agent_token(new_token)
+
     db.commit()
 
     return {
@@ -81,4 +109,6 @@ def upload_scan_results(
         "scan_type": payload.scan_type,
         "keys_inserted": keys_inserted,
         "policy_findings_inserted": findings_inserted,
+        # The agent reads this and writes it back to its config.json.
+        "rotated_agent_token": new_token,
     }

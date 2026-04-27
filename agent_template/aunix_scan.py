@@ -377,7 +377,8 @@ def assign_pairing(records: list[dict]) -> None:
 
 # --- Upload ---
 
-def upload(api_url: str, token: str, payload: dict) -> str:
+def upload(api_url: str, token: str, payload: dict) -> dict:
+    """POST scan results, return parsed JSON response."""
     endpoint = f"{api_url.rstrip('/')}/scan-results"
     body = json.dumps(payload).encode("utf-8")
 
@@ -391,7 +392,23 @@ def upload(api_url: str, token: str, payload: dict) -> str:
         method="POST",
     )
     with urllib_request.urlopen(req, timeout=60) as response:
-        return response.read().decode("utf-8")
+        text = response.read().decode("utf-8")
+        try:
+            return json.loads(text)
+        except json.JSONDecodeError:
+            return {"raw": text}
+
+
+def save_rotated_token(config_path: Path, cfg: dict, new_token: str) -> None:
+    """Rewrite config.json with the rotated agent token."""
+    cfg["agent_token"] = new_token
+    tmp = config_path.with_suffix(".json.tmp")
+    tmp.write_text(json.dumps(cfg, indent=2))
+    tmp.replace(config_path)
+    try:
+        config_path.chmod(0o600)
+    except Exception:
+        pass
 
 
 # --- Main ---
@@ -914,7 +931,13 @@ def main() -> int:
     try:
         resp = upload(cfg["api_url"], cfg["agent_token"], payload)
         print("Upload OK:")
-        print(resp)
+        print(json.dumps({k: v for k, v in resp.items() if k != "rotated_agent_token"}, indent=2))
+
+        # Rotate the agent token. Backend already invalidated the old one.
+        rotated = resp.get("rotated_agent_token")
+        if rotated:
+            save_rotated_token(Path(args.config), cfg, rotated)
+            print("Agent token rotated. Old token is no longer valid.")
         return 0
     except HTTPError as e:
         print(f"Upload failed (HTTP {e.code}): {e.read().decode('utf-8', 'ignore')}",

@@ -3,7 +3,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from database import Base, engine
-from routers import auth, targets, keys, scan_results, installers, dashboard, policy
+from routers import auth, targets, keys, scan_results, installers, dashboard, policy, reports
 
 app = FastAPI(title="AUNIX - SSH Key Audit API")
 
@@ -33,6 +33,7 @@ app.include_router(scan_results.router, prefix="/api")
 app.include_router(installers.router, prefix="/api")
 app.include_router(dashboard.router, prefix="/api")
 app.include_router(policy.router, prefix="/api")
+app.include_router(reports.router, prefix="/api")
 
 
 @app.get("/")

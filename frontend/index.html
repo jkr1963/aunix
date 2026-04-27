@@ -6,11 +6,6 @@
   <title>AUNIX</title>
   <link rel="stylesheet" href="styles.css" />
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-  <script>
-  window.AUNIX_CONFIG = {
-    apiBase: "https://aunix-api.onrender.com/api"
-  };
-  </script>
 </head>
 <body>
 
@@ -88,10 +83,10 @@
     </div>
     <nav class="sidebar-menu">
       <button class="menu-item" data-section="overviewSection">Fleet Overview</button>
-      <button class="menu-item" data-section="dashboardSection">Per-Machine Detail</button>
+      <button class="menu-item" data-section="dashboardSection">Machine Audit</button>
       <button class="menu-item" data-section="targetsSection">My Machines</button>
       <button class="menu-item" id="scanTargetBtn">Register a New Machine</button>
-      <button class="menu-item" id="downloadReportBtn">Download Report (CSV)</button>
+      <button class="menu-item" id="downloadReportBtn">Download Fleet PDF Report</button>
       <button class="menu-item" data-section="profileSection">Profile</button>
       <button class="menu-item" data-section="aboutSection">About</button>
       <button class="menu-item logout-btn" id="logoutBtn">Log Out</button>
@@ -219,13 +214,14 @@
       <!-- PER-MACHINE DETAIL                             -->
       <!-- ============================================== -->
       <section id="dashboardSection" class="content-section hidden-section">
-        <h2 class="section-h">Per-Machine Detail</h2>
+        <h2 class="section-h">Machine Audit</h2>
         <p class="section-sub">Drill into one machine to see findings and inventory.</p>
 
         <section class="controls">
           <label for="targetSelect">Machine:</label>
           <select id="targetSelect"><option value="">No machines registered</option></select>
           <button id="refreshDataBtn" class="secondary-btn" style="margin-left: 12px;">Refresh</button>
+          <button id="downloadMachinePdfBtn" class="primary-btn" style="margin-left: 8px;">Download PDF Report</button>
         </section>
 
         <section class="target-info">

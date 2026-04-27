@@ -151,6 +151,9 @@ window.addEventListener("DOMContentLoaded", () => {
     pendingRegistrationEmail = ""; pendingRegistrationPassword = "";
     [loginForm, otpForm, registerForm, mfaVerifyForm].forEach(f => f && f.reset());
     mfaQrImage.src = "";
+    // Close sidebar so it doesn't linger over the login screen
+    sidebar.classList.remove("open");
+    sidebarOverlay.classList.remove("show");
     showLoginScreen();
   }
 
@@ -217,6 +220,8 @@ window.addEventListener("DOMContentLoaded", () => {
     if (password.length < 8) { registerMessage.textContent = "Password must be at least 8 characters."; return; }
     if (password !== confirm) { registerMessage.textContent = "Passwords do not match."; return; }
     try {
+      // Single registration call: backend stashes a pending entry,
+      // returns QR code. Nothing committed to the DB yet.
       const res = await fetch(`${API_BASE}/auth/register`, {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name, email, password }),
@@ -224,15 +229,9 @@ window.addEventListener("DOMContentLoaded", () => {
       const data = await res.json().catch(() => ({}));
       if (!res.ok) { registerMessage.textContent = data.detail || "Registration failed."; return; }
 
-      const mfaRes = await fetch(`${API_BASE}/auth/setup-mfa`, {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password }),
-      });
-      const mfaData = await mfaRes.json().catch(() => ({}));
-      if (!mfaRes.ok) { registerMessage.textContent = mfaData.detail || "MFA setup failed."; return; }
       pendingRegistrationEmail = email;
       pendingRegistrationPassword = password;
-      mfaQrImage.src = `data:image/png;base64,${mfaData.qr_code_base64}`;
+      mfaQrImage.src = `data:image/png;base64,${data.qr_code_base64}`;
       mfaVerifyForm.reset();
       showOnlyAuthSection(mfaSetupSection);
     } catch (err) { registerMessage.textContent = "Network error during registration."; console.error(err); }
@@ -247,6 +246,8 @@ window.addEventListener("DOMContentLoaded", () => {
     }
     if (!otpCode) { mfaMessage.textContent = "Enter the code."; return; }
     try {
+      // This call now CREATES the user in the database. Before this
+      // succeeds, no user record exists.
       const res = await fetch(`${API_BASE}/auth/verify-mfa`, {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email: pendingRegistrationEmail, otp_code: otpCode }),
@@ -254,6 +255,7 @@ window.addEventListener("DOMContentLoaded", () => {
       const data = await res.json().catch(() => ({}));
       if (!res.ok) { mfaMessage.textContent = data.detail || "MFA activation failed."; return; }
 
+      // User is now in the DB. Log them in immediately.
       const loginRes = await fetch(`${API_BASE}/auth/login-mfa`, {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -785,45 +787,43 @@ window.addEventListener("DOMContentLoaded", () => {
     });
   }
 
-  // ---------- CSV report ----------
+  // ---------- PDF report downloads ----------
+  async function downloadPdf(path, filename) {
+    try {
+      const res = await apiFetch(path);
+      if (!res.ok) throw new Error(`Download failed: ${res.status}`);
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(url), 10000);
+    } catch (err) {
+      alert("Could not download report. Make sure you have at least one scan.");
+      console.error(err);
+    }
+  }
+
   downloadReportBtn.addEventListener("click", () => {
-    if (allKeys.length === 0 && policyFindings.length === 0) { alert("No data to export."); return; }
-
-    const lines = [];
-
-    if (allKeys.length > 0) {
-      lines.push("# SSH KEYS");
-      const headers = ["severity","username","file_path","fingerprint","key_algorithm","key_bits","owner","permissions","file_type","key_kind","paired_key_status","last_modified","last_accessed","findings","recommendations"];
-      lines.push(headers.join(","));
-      allKeys.forEach(k => {
-        lines.push(headers.map(h => {
-          let v = k[h] ?? "";
-          if ((h === "findings" || h === "recommendations") && Array.isArray(v)) v = v.join("; ");
-          return `"${String(v).replace(/"/g, '""')}"`;
-        }).join(","));
-      });
-      lines.push("");
-    }
-
-    if (policyFindings.length > 0) {
-      lines.push("# POLICY FINDINGS");
-      const headers = ["severity","category","rule_id","title","description","file_path","evidence","recommendation"];
-      lines.push(headers.join(","));
-      policyFindings.forEach(f => {
-        lines.push(headers.map(h => {
-          let v = f[h] ?? "";
-          return `"${String(v).replace(/"/g, '""')}"`;
-        }).join(","));
-      });
-    }
-
-    const csv = lines.join("\n");
-    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url; a.download = "aunix_audit_report.csv"; a.click();
-    URL.revokeObjectURL(url);
+    const date = new Date().toISOString().slice(0, 10).replace(/-/g, "");
+    downloadPdf("/reports/fleet", `aunix_fleet_${date}.pdf`);
+    sidebar.classList.remove("open");
+    sidebarOverlay.classList.remove("show");
   });
+
+  const downloadMachinePdfBtn = $("downloadMachinePdfBtn");
+  if (downloadMachinePdfBtn) {
+    downloadMachinePdfBtn.addEventListener("click", () => {
+      const t = getSelectedTarget();
+      if (!t) { alert("Pick a machine first."); return; }
+      const safeHost = (t.hostname || `target${t.id}`).replace(/[^a-zA-Z0-9_-]/g, "_");
+      const date = new Date().toISOString().slice(0, 10).replace(/-/g, "");
+      downloadPdf(`/reports/audit/${t.id}`, `aunix_audit_${safeHost}_${date}.pdf`);
+    });
+  }
 
   // ---------- Register target ----------
   scanTargetBtn.addEventListener("click", () => {
