@@ -17,6 +17,24 @@ def _public_api_url() -> str:
     return os.getenv("PUBLIC_API_URL", "http://127.0.0.1:8000/api")
 
 
+def _scanner_url() -> str:
+    return os.getenv(
+        "AUNIX_SCANNER_URL",
+        "https://raw.githubusercontent.com/jkr1963/aunix/main/agent/aunix_scan.py",
+    )
+
+
+def _build_install_command(target_id: int, agent_token: str) -> str:
+    """Compose the one-liner the user pastes into their Terminal."""
+    return (
+        f"curl -fsSL {_scanner_url()} | "
+        f"sudo AUNIX_TARGET_ID={target_id} "
+        f"AUNIX_AGENT_TOKEN={agent_token} "
+        f"AUNIX_API_URL={_public_api_url()} "
+        f"python3 -"
+    )
+
+
 @router.post("", response_model=TargetCreateResponse)
 def register_target(
     payload: TargetCreate,
@@ -37,10 +55,7 @@ def register_target(
     db.commit()
     db.refresh(target)
 
-    install_command = (
-        f"tar -xzf aunix-agent-{target.id}.tar.gz && "
-        f"cd aunix-agent-{target.id} && sudo ./run.sh"
-    )
+    install_command = _build_install_command(target.id, agent_token)
 
     return TargetCreateResponse(
         id=target.id,

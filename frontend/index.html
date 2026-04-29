@@ -6,11 +6,6 @@
   <title>AUNIX</title>
   <link rel="stylesheet" href="styles.css" />
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-  <script>
-    window.AUNIX_CONFIG = {
-      apiBase: "https://aunix-api.onrender.com/api"
-    };
-  </script>
 </head>
 <body>
 
@@ -365,22 +360,29 @@
   </div>
 
   <div id="installerModal" class="modal hidden">
-    <div class="modal-card" style="width: 520px; max-width: 95vw;">
-      <h2>Download the Scanner Agent</h2>
+    <div class="modal-card" style="width: 620px; max-width: 95vw;">
+      <h2>Run the Scanner Agent</h2>
       <p class="login-subtitle" id="installerHeadline">
-        Run this on the machine you registered.
+        Run this command on the machine you registered.
       </p>
       <div style="display:flex; flex-direction:column; gap:14px; margin-top:16px;">
-        <button type="button" id="downloadInstallerBtn" class="primary-btn">
-          Download agent package
-        </button>
         <div>
-          <p style="margin: 0 0 6px; font-weight:600;">Then in a Terminal:</p>
+          <p style="margin: 0 0 6px; font-weight:600;">In a Terminal on the target machine:</p>
           <pre id="installCommand" class="install-cmd">…</pre>
-          <button type="button" id="copyInstallCmdBtn" class="secondary-btn" style="margin-top:6px;">
-            Copy command
-          </button>
+          <div style="display:flex; gap:8px; margin-top:8px;">
+            <button type="button" id="copyInstallCmdBtn" class="primary-btn">
+              Copy command
+            </button>
+            <button type="button" id="downloadInstallerBtn" class="secondary-btn">
+              Generate fresh command
+            </button>
+          </div>
         </div>
+        <p class="muted" style="font-size: 0.85rem; margin: 4px 0 0;">
+          The command fetches the scanner from GitHub and runs it once with sudo.
+          After a successful scan, the token is rotated automatically — generate a
+          fresh command for any subsequent scan.
+        </p>
       </div>
       <div class="modal-actions" style="margin-top:18px;">
         <button type="button" class="secondary-btn" id="closeInstallerModalBtn">Close</button>

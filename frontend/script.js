@@ -380,7 +380,7 @@ window.addEventListener("DOMContentLoaded", () => {
         <td>${escapeHtml(t.status || "")}</td>
         <td>${escapeHtml(formatDate(t.last_scan_at))}</td>
         <td>
-          <button class="row-actions-btn" data-action="reissue" data-id="${t.id}">Re-download agent</button>
+          <button class="row-actions-btn" data-action="reissue" data-id="${t.id}">Get install command</button>
           <button class="row-actions-btn danger" data-action="delete" data-id="${t.id}">Delete</button>
         </td>`;
       tbody.appendChild(row);
@@ -404,29 +404,27 @@ window.addEventListener("DOMContentLoaded", () => {
     } catch (err) { alert("Could not delete target."); console.error(err); }
   }
 
-  // ---------- Agent download ----------
-  async function downloadAgentTarball(targetId) {
+  // ---------- Install command ----------
+  async function fetchInstallCommand(targetId) {
+    // Calls POST /installers/agent/{id} which generates a fresh agent
+    // token (invalidating any previous one) and returns the curl-based
+    // one-line install command.
     const res = await apiFetch(`/installers/agent/${targetId}`, { method: "POST" });
-    if (!res.ok) throw new Error("Failed to build agent");
-    const blob = await res.blob();
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url; a.download = `aunix-agent-${targetId}.tar.gz`;
-    document.body.appendChild(a); a.click(); document.body.removeChild(a);
-    setTimeout(() => URL.revokeObjectURL(url), 10000);
+    if (!res.ok) throw new Error("Failed to issue install command");
+    const data = await res.json();
+    return data.install_command;
   }
 
   async function reissueAgent(targetId) {
     try {
-      await downloadAgentTarball(targetId);
-      const cmd = `tar -xzf aunix-agent-${targetId}.tar.gz && cd aunix-agent-${targetId} && sudo ./run.sh`;
+      const cmd = await fetchInstallCommand(targetId);
       activeAgentTargetId = targetId;
       activeAgentInstallCmd = cmd;
       installCommand.textContent = cmd;
-      installerHeadline.textContent = "Run this on the machine you registered.";
-      installerMessage.textContent = "Note: any previously downloaded agent for this machine has been revoked.";
+      installerHeadline.textContent = "Run this command on the machine you registered.";
+      installerMessage.textContent = "Note: any previously issued command for this machine has been revoked.";
       installerModal.classList.remove("hidden");
-    } catch (err) { alert("Could not download agent."); console.error(err); }
+    } catch (err) { alert("Could not generate install command."); console.error(err); }
   }
 
   // ---------- Per-machine: keys + policy ----------
@@ -858,10 +856,9 @@ window.addEventListener("DOMContentLoaded", () => {
       activeAgentTargetId = data.id;
       activeAgentInstallCmd = data.install_command;
       installCommand.textContent = data.install_command;
-      installerHeadline.textContent = `Machine "${data.hostname}" registered. Download the agent and run it.`;
+      installerHeadline.textContent = `Machine "${data.hostname}" registered. Run this command on the target machine.`;
       installerMessage.textContent = "";
 
-      await downloadAgentTarball(data.id);
       scanTargetForm.reset();
       scanModal.classList.add("hidden");
       installerModal.classList.remove("hidden");
@@ -870,8 +867,13 @@ window.addEventListener("DOMContentLoaded", () => {
 
   downloadInstallerBtn.addEventListener("click", async () => {
     if (!activeAgentTargetId) return;
-    try { await downloadAgentTarball(activeAgentTargetId); }
-    catch (err) { alert("Failed to download agent."); console.error(err); }
+    try {
+      const cmd = await fetchInstallCommand(activeAgentTargetId);
+      activeAgentInstallCmd = cmd;
+      installCommand.textContent = cmd;
+      installerMessage.textContent = "Fresh command generated. The previous one is now revoked.";
+    }
+    catch (err) { alert("Failed to generate command."); console.error(err); }
   });
 
   copyInstallCmdBtn.addEventListener("click", async () => {
